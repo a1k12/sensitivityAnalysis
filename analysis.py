@@ -1,222 +1,138 @@
 import collections,pickle,ast,os
 import numpy as np
 import matplotlib
-import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
-
+#matplotlib.use('GTKAgg')
+import matplotlib.pyplot     as plt
 ####################################################################
-"""
-Helper functions
-    -analyzeSensitivity
-
-Plot Functions
-    - heat
-    - PCA_plot
-    - trajectory (pick one that looks converged)
-    - plotBaseCaseIndividualParams
-    - plotCostFunc
-
-"""
-
-
+####################################################################
 ####################################################################
 
-def analyzeSensitivity():
-    def analyzeOneThing(path,burnin=0):
-        with open(path,'r') as f: raw_output = f.read().split('\n')[1:]
-        output = np.array(map(lambda x: np.array(ast.literal_eval(x)),raw_output))
-        if  burnin: output=output[burnin:,:]
-        ones = np.ones((42,))
-        s    = np.std(output,axis=0)
-        ns  = np.divide(ones, s, out=np.zeros_like(s), where=s!=0)
-        return output,ns
+def rec_dd(): return collections.defaultdict(rec_dd)
 
-    with open('12.9.17_beta1000_corrected_costs.txt','r') as f:
-        raw_costs = np.array(f.read().split('\n')[1:])[2000:] #ASSUME 2000 burnin
-        #no burnin
-#       raw_costs = np.array(f.read().split('\n')[1:])
-    base_output,base_ns  = analyzeOneThing('12.9.17_beta1000_corrected_inputs.txt', 2000)
-    f_output,f_ns        = analyzeOneThing('12.9.17_beta1000_forces.txt',2000)
-    e_output,e_ns        = analyzeOneThing('12.9.17_beta1000_energies.txt',2000)
+def analyzeSensitivity(folder):
 
-    return {'result' : base_ns,'cost': raw_costs,'trajs': base_output
-                ,'result_forceonly':f_ns,'result_energyonly':e_ns
-                ,'trajs_forceonly':f_ns,'trajs_energyonly':e_ns}
+    resultDict = collections.defaultdict(rec_dd)
 
-param_labels = ['$C H \phi_{0}$', '$C H A_{1}$', '$C H A_{2}$', '$C H A_{3}$'
-    , '$C H A_{4}$', '$C C \phi_{0}$', '$C C A_{1}$', '$C C A_{2}$', '$C C A_{3}$'
-    , '$C C A_{4}$', '$H H \phi_{0}$', '$H H A_{1}$', '$H H A_{2}$', '$H H A_{3}$'
-    , '$H H A_{4}$', '$C C sss h_{0}$', '$C C sss B_{1}$', '$C C sss B_{2}$'
-    , '$C C sps h_{0}$', '$C C sps B_{1}$', '$C C sps B_{2}$', '$C C pps h_{0}$'
-    , '$C C pps B_{1}$', '$C C pps B_{2}$', '$C C ppp h_{0}$', '$C C ppp B_{1}$'
-    , '$C C ppp B_{2}$', '$H C sss h_{0}$', '$H C sss B_{1}$', '$H C sss B_{2}$'
-    , '$H C sps h_{0}$', '$H C sps B_{1}$', '$H C sps B_{2}$', '$H H sss h_{0}$'
-    , '$H H sss B_{1}$', '$H H sss B_{2}$', '$H \epsilon_{s}$', '$H \epsilon_{p}$'
-    , '$H U$', '$C \epsilon_{s}$', '$C \epsilon_{p}$', '$C U$']
+    for d in os.listdir('.'):
+        if 'DS' not in d and 'costs' not in d and 'result' not in d:
+            print 'd ',d
+            i,j,k,l = map(int,d[:-4].split('_'))
+            with open(d,'r') as f:
+                raw_output = f.read().split('\n')[1:]
 
-noH_param_labels = ['$C H \phi_{0}$', '$C H A_{1}$', '$C H A_{2}$', '$C H A_{3}$'
-    , '$C H A_{4}$', '$C C \phi_{0}$', '$C C A_{1}$', '$C C A_{2}$', '$C C A_{3}$'
-    , '$C C A_{4}$', '$C C sss h_{0}$', '$C C sss B_{1}$', '$C C sss B_{2}$'
-    , '$C C sps h_{0}$', '$C C sps B_{1}$', '$C C sps B_{2}$', '$C C pps h_{0}$'
-    , '$C C pps B_{1}$', '$C C pps B_{2}$', '$C C ppp h_{0}$', '$C C ppp B_{1}$'
-    , '$C C ppp B_{2}$', '$H C sss h_{0}$', '$H C sss B_{1}$', '$H C sss B_{2}$'
-    , '$H C sps h_{0}$', '$H C sps B_{1}$', '$H C sps B_{2}$','$H \epsilon_{s}$'
-    , '$H \epsilon_{p}$', '$H U$', '$C \epsilon_{s}$', '$C \epsilon_{p}$', '$C U$']
+            output = np.array(map(lambda x: np.array(ast.literal_eval(x)),raw_output))
+            m = np.abs(np.mean(output,axis=0))
+            s = np.std(output,axis=0)
+            ns = np.divide(s, m, out=np.zeros_like(s), where=m!=0)
 
-def noHanalyzeSensitivity():
-    def noHanalyzeOneThing(path,burnin=0):
-        with open(path,'r') as f: raw_output = f.read().split('\n')[1:]
-        output = np.array(map(lambda x: np.array(ast.literal_eval(x)),raw_output))
-        noH_output = np.delete(output, [10, 11, 12, 13, 14, 33, 34, 35], axis = 1)
-        if burnin: noH_output = noH_output[burnin:,:]
-        ones = np.ones((34,))
-        s = np.std(noH_output, axis=0)
-        ns = np.divide(ones, s, out=np.zeros_like(s), where=s!=0)
-        return output, ns
-    
-    base_output, base_ns = noHanalyzeOneThing('12.9.17_beta1000_corrected_inputs.txt',2000)
-    return {'result' : base_ns, 'trajs': base_output}
+            resultDict[i][j][k][l] = ns
 
-def heat():
-    from scipy import stats
+    with open('result.pckl','wb') as f: pickle.dump(resultDict,f)
+
+
+
+def    plotBaseCaseIndividualParams():
+    with open('result.pckl','rb') as f: result = pickle.load(f)
     f,ax = plt.subplots(nrows=1,ncols=1)
 
-    trajs   = analyzeSensitivity()['trajs']
-    a = np.zeros((42, 42))
-    for i in range(42):
-        for j in range(i,42):
-            a[i,j] = stats.linregress(trajs[:,i],trajs[:,j]).rvalue
-            a[j,i] = stats.stats.pearsonr(trajs[:,i],trajs[:,j])[0]
-    store = np.sort(a, axis=None)
-    print store[1721]
-    print store[1720]
-    plt.imshow(a, cmap='hot', interpolation='nearest')
-    plt.colorbar()
-    ax.set_xticks(np.arange(42)); ax.set_xticklabels(param_labels)
-    ax.set_yticks(np.arange(42)); ax.set_yticklabels(param_labels)
-    plt.xticks(fontsize=4,rotation=45)
-    plt.yticks(fontsize=4,rotation=45)
-    ax.xaxis.label.set_size(4)
-    ax.set_xlabel('Parameter', fontsize = 10);ax.set_ylabel('Parameter',fontsize = 10)
-
-#   plt.show()
-
-def trajectory(i):
-    """
-    i < 1: plot cost trajectory
-    otherwise: plot trajectory of parameter i (starting at 1)
-    """
-    f,ax = plt.subplots(nrows=1,ncols=1)
-
-    if i<1: traj= analyzeSensitivity()['cost']
-    else:   traj = analyzeSensitivity()['trajs'][:,i-1]
-    ax.plot(np.arange(len(traj)),traj)
-#   ax.set_xlabel('Time');ax.set_ylabel(param_labels[i])
-    ax.set_xlabel('Time', fontsize = 20); ax.set_ylabel('Cost function (energy + forces)', fontsize = 20)
+    basecase = result[1][1][2][0]
+    for i in range(len(basecase)):
+        ax.bar(i,basecase[i],width=0.5,color = 'red',label='_nolegend_')
     plt.show()
 
-def noHplotBaseCaseIndividualParams():
-    result = noHanalyzeSensitivity()['result']
-    f, ax = plt.subplots(nrows=1,ncols=1)
-    ax.set_xticks(np.arange(1,35))
-    ax.set_xticklabels(noH_param_labels)
-    for tick in ax.get_xticklabels(): tick.set_rotation(45)
-    for i in range(34):
-        ax.bar(i+1,result[i],width=0.5,color = 'red',label='_nolegend_')
+def    plotAlphaDependence():
+    with open('result.pckl','rb') as f: result = pickle.load(f)
+    f,ax = plt.subplots(nrows=1,ncols=1)
+
+    c1 = result[1][1][0][0]
+    c2 = result[1][1][1][0]
+    c3 = result[1][1][2][0] # base case
+    for i in range(len(c1)):
+        ax.bar(i-.33,c1[i],width=0.33,color = 'red')
+        ax.bar(i,c2[i],width=0.33,color = 'blue')
+        ax.bar(i+.33,c3[i],width=0.33,color = 'green')
+
+    legend = ax.legend((r'$\alpha  = 0.05$',r'$\alpha  = 0.01$',r'$\alpha  = 0.005$'),loc='upper right', fancybox=True)
+    ax.set_title(r'$\alpha $ dependence',fontsize=18)
+    ax.set_xlabel('Parameters',fontsize=18)
+    ax.set_ylabel(r'$\frac{\sigma}{\mu}$', fontsize=18)
     plt.show()
 
-def  plotBaseCaseIndividualParams():
-    result   = analyzeSensitivity()['result']
+def   plotCostFuncDependence():
+    with open('result.pckl','rb') as f: result = pickle.load(f)
     f,ax = plt.subplots(nrows=1,ncols=1)
-    ax.set_xticks(np.arange(1,43))
-    ax.set_xticklabels(param_labels)
-    for tick in ax.get_xticklabels(): tick.set_rotation(45)
-    for i in range(42):
-        ax.bar(i+1,result[i],width=0.5,color = 'red',label='_nolegend_')
-    ax.set_xlabel('Parameter');ax.set_ylabel(r'$\frac{1}{\sigma}$', fontsize = 20)
+
+    c1 = result[0][1][2][0]
+    c2 = result[1][1][2][0] # base case
+    c3 = result[2][1][2][0]
+    for i in range(len(c1)):
+        ax.bar(i-.33,c1[i],width=0.33,color = 'red',label='1')
+        ax.bar(i,c2[i],width=0.33,color = 'blue',label='2')
+        ax.bar(i+.33,c3[i],width=0.33,color = 'green',label='3')
+
+    legend = ax.legend(('Forces','Energy+Forces','Energy'),loc='upper right', fancybox=True)
+    legend.draggable()
+    ax.set_title(r'Cost function dependence',fontsize=18)
+    ax.set_xlabel('Parameters',fontsize=18)
+    ax.set_ylabel(r'$\frac{\sigma}{\mu}$',fontsize=18)
+
+    plt.show()
+
+def  plotBetaDependence():
+    with open('result.pckl','rb') as f: result = pickle.load(f)
+    f,ax = plt.subplots(nrows=1,ncols=1)
+
+    c1 = result[1][1][2][0] #base case
+    c2 = result[1][1][2][1]
+    for i in range(len(c1)):
+        ax.bar(i-.25,c1[i],width=0.5,color = 'red',label='1')
+        ax.bar(i+.25,c2[i],width=0.5,color = 'blue',label='2')
+
+    legend = ax.legend((r'$\beta = 1$',r'$\beta = 10$'),loc='upper right',fancybox=True)
+    legend.draggable()
+    ax.set_title(r'$\beta $ dependence',fontsize=18)
+    ax.set_xlabel('Parameters',fontsize=18)
+    ax.set_ylabel(r'$\frac{\sigma}{\mu}$',fontsize=18)
+
     plt.show()
 
 
-def plotCostFunc(normalize=False):
-    results = [ analyzeSensitivity()['result']
-                 ,analyzeSensitivity()['result_forceonly']
-                 ,analyzeSensitivity()['result_energyonly']]
-
-    if normalize: map(lambda x: x/np.sum(x),results)
+def    plotJumpFuncDependence():
+    with open('result.pckl','rb') as f: result = pickle.load(f)
     f,ax = plt.subplots(nrows=1,ncols=1)
-    ax.set_xticks(np.arange(1,43))
-    ax.set_xticklabels(param_labels)
-    for tick in ax.get_xticklabels(): tick.set_rotation(45)
-    colors = ['red','blue','green']
-    leg   = ['Energy and Forces','Forces','Energies']
-    shift  = [.666,1,1.333]
-    for i,r in enumerate(results):
-        for j in range(42):
-            ax.bar(j+shift[i],r[j],width=0.3,color = colors[i],label=leg[i] if j==0 else None)
-    ax.legend()
-    ax.set_xlabel('Parameter', fontsize = 15);ax.set_ylabel(r'$\frac{1}{\sigma}$', fontsize = 20)
-    ax.set_title('Quantification of cost function', fontsize = 20)
+
+    j1 = result[1][1][2][0] # base case
+    j2 = result[1][0][2][0]
+
+    for i in range(len(j1)):
+        ax.bar(i-.25,j1[i],width=0.5,color = 'red',label='_nolegend_')
+        ax.bar(i+.25,j2[i],width=0.5,color = 'blue',label='_nolegend_')
     plt.show()
-
-
-def PCA_plot(plot_variance=False):
+def PCA_plot():
     f,ax = plt.subplots(nrows=1,ncols=1)
 
-    trajs   = analyzeSensitivity()['trajs']
-    pca       = PCA(n_components=42,whiten=True)
-    pca.fit(trajs)
-    if plot_variance:
-        x         = np.arange(1,43,1)
-        y         =  pca.explained_variance_ratio_*100
-        ax.semilogy(x[:-1],y[:-1],linestyle='None', marker='o')
-        ax.set_title('PCA Analysis of TB Parameter Space',fontsize=18)
-        ax.set_xlabel('Number of principal components',fontsize=18)
-        ax.set_ylabel('Fraction of variance explained',fontsize=18)
-        plt.show()
-    else:
-        pc1 = sorted(zip(map(abs,pca.components_[0]),param_labels))
-        for i in range(42):
-            ax.bar(i-.3,abs(pca.components_[0][i]),width=0.2,color = 'red',label='1st' if i==0 else None)
-            ax.bar(i,abs(pca.components_[1][i]),width=0.2,color = 'blue',label='2nd' if i==0 else None)
-            ax.bar(i+.3,abs(pca.components_[2][i]),width=0.2,color = 'green',label='3rd' if i==0 else None)
-        ax.set_xticks(np.arange(42))
-        ax.set_xticklabels(param_labels)       
-        for tick in ax.get_xticklabels(): tick.set_rotation(45)
-        ax.legend()
-        ax.set_xlabel('Parameter',fontsize=15);ax.set_ylabel('Magnitude of Principal Component Loading',fontsize = 12)
-        plt.show()
+    from sklearn.decomposition import PCA
+    with open('1_1_2_0.txt','r') as f: raw_output = f.read().split('\n')[1:]
+    output = np.array(map(lambda x: np.array(ast.literal_eval(x)),raw_output))
+    print '\nraw output ',output
+    s         = (1101,1)
+    ones      = np.ones(s)
+    raw_mean  = np.mean(output,axis=0)
+    raw_sd    = np.std(output,axis=0)
+    m         = np.dot(ones,[raw_mean])
+    sd        = np.dot(ones,[raw_sd])
 
-def noH_PCA_plot(plot_variance=False):
-    f,ax = plt.subplots(nrows=1,ncols=1)
-    trajs  = noHanalyzeSensitivity()['trajs']
-    pca    = PCA(n_components=34, whiten=True)
-    pca.fit(trajs)
-    if plot_variance:
-        x       = np.arange(1, 35, 1)
-        y       = pca.explained_variance_ratio_*100
-        ax.semilogy(x[:-1],y[:-1],linestyle='None', marker='o')
-        ax.set_xlabel('Number of principal components',fontsize=18)
-        ax.set_ylabel('Fraction of variance explained',fontsize=18)
-    else:
-        pc1 = sorted(zip(map(abs,pca.components_[0]),noH_param_labels))
-        for i in range(34):
-            ax.bar(i-.3, abs(pca.components_[0][i]),width=0.2,color = 'red',label='1st' if i==0 else None)
-            ax.bar(i,abs(pca.components_[1][i]),width=0.2,color = 'blue',label='2nd' if i==0 else None)
-            ax.bar(i+.3,abs(pca.components_[2][i]),width=0.2,color = 'green',label='3rd' if i==0 else None)
-    ax.set_xticks(np.arange(34))
-    ax.set_xticklabels(noH_param_labels)
-    for tick in ax.get_xticklabels(): tick.set_rotation(45)
-    ax.legend()
-    ax.set_xlabel('Parameter');ax.set_ylabel('Magnitude of Principal Component Loading')
+    output    = output - m
+    pca_input = np.nan_to_num(np.divide(output, sd))
+
+    pca       = PCA(n_components=42)#,whiten=True)
+    pca.fit(pca_input)
+    x         = np.arange(1,43,1)
+    y         =  pca.explained_variance_/np.sum(pca.explained_variance_)*100
+
+    ax.semilogy(x[:-1],y[:-1],linestyle='None', marker='o')
+    ax.set_title('PCA Analysis of TB Parameter Space',fontsize=18)
+    ax.set_xlabel('Number of principal components',fontsize=18)
+    ax.set_ylabel('Fraction of variance explained',fontsize=18)
     plt.show()
-
-
-if __name__ == '__main__':
-    PCA_plot()
-#   trajectory(0)
-#   noH_PCA_plot()
-#   noHplotBaseCaseIndividualParams()
-#   analyzeSensitivity()
-#   heat()
-#   plotCostFunc()
-    #plotCostFunc()#plotBaseCaseIndividualParams()#heat()#plotBaseCaseIndividualParams()# trajectory(0) # #analyzeSensitivity()#
+if __name__ == '__main__': PCA_plot()
